@@ -239,6 +239,10 @@ async def optimize_deception(request: OptimizationRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
 
+@app.get("/")
+async def root():
+    return {"message": "PS-3 ADO + BAS API", "status": "running", "timestamp": datetime.now().isoformat()}
+
 @app.get("/export_slide")
 async def export_slide():
     """Generate export data for PDF generation"""
