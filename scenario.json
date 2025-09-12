@@ -1,0 +1,135 @@
+{
+  "title": "Advanced Persistent Threat (APT) Simulation - CVE-2024-1234",
+  "description": "Simulate defense against a sophisticated APT group targeting critical infrastructure",
+  "scenario_id": "apt_simulation_2024",
+  "threat_intelligence": {
+    "source": "CISA Advisory AA24-1234",
+    "date": "2024-09-12",
+    "severity": "High",
+    "threat_actor": "APT-29 (Cozy Bear)",
+    "tactics": ["T1078", "T1003", "T1059", "T1566"],
+    "indicators": [
+      "IOC-1: 192.168.1.100 (C2 Server)",
+      "IOC-2: malware.exe (SHA256: abc123...)",
+      "IOC-3: suspicious_domain.com"
+    ]
+  },
+  "assets": [
+    {
+      "id": "db_server",
+      "name": "Database Server",
+      "value": 500000,
+      "vulnerability": "CVE-2024-1234",
+      "cvss_score": 8.8,
+      "description": "Critical database containing customer PII and financial records"
+    },
+    {
+      "id": "mail_server", 
+      "name": "Mail Server",
+      "value": 200000,
+      "vulnerability": "CVE-2024-5678",
+      "cvss_score": 7.2,
+      "description": "Email server handling corporate communications"
+    },
+    {
+      "id": "web_server",
+      "name": "Web Server", 
+      "value": 150000,
+      "vulnerability": "CVE-2024-9012",
+      "cvss_score": 6.5,
+      "description": "Public-facing web application"
+    }
+  ],
+  "threats": [
+    {
+      "id": "H1",
+      "name": "Database Exfiltration",
+      "probability": 0.6,
+      "impact": 500000,
+      "description": "APT group attempts to exfiltrate sensitive database records",
+      "attack_vector": "SQL Injection → Privilege Escalation → Data Exfiltration",
+      "detection_difficulty": "High",
+      "recovery_time": "72 hours"
+    },
+    {
+      "id": "H2", 
+      "name": "Mailbox Takeover",
+      "probability": 0.25,
+      "impact": 200000,
+      "description": "Compromise email accounts for lateral movement",
+      "attack_vector": "Phishing → Credential Harvesting → Account Takeover",
+      "detection_difficulty": "Medium",
+      "recovery_time": "24 hours"
+    },
+    {
+      "id": "H3",
+      "name": "Web Defacement", 
+      "probability": 0.15,
+      "impact": 150000,
+      "description": "Deface public website for reputation damage",
+      "attack_vector": "Web Application Attack → File Upload → Defacement",
+      "detection_difficulty": "Low",
+      "recovery_time": "4 hours"
+    }
+  ],
+  "actions": [
+    {
+      "id": "patch_db",
+      "name": "Patch DB vuln",
+      "cost": 15,
+      "description": "Apply CVE-2024-1234 patch to database server",
+      "effectiveness": {
+        "H1": 0.8,
+        "H2": 0.1, 
+        "H3": 0.05
+      },
+      "deception_factor": 0.3,
+      "monitoring_boost": 0.4,
+      "implementation_time": "2 hours",
+      "risk_level": "Low"
+    },
+    {
+      "id": "auth_logs",
+      "name": "Enable verbose auth logs", 
+      "cost": 5,
+      "description": "Enable detailed authentication logging",
+      "effectiveness": {
+        "H1": 0.2,
+        "H2": 0.7,
+        "H3": 0.1
+      },
+      "deception_factor": 0.1,
+      "monitoring_boost": 0.8,
+      "implementation_time": "30 minutes",
+      "risk_level": "Very Low"
+    },
+    {
+      "id": "web_honeypot",
+      "name": "Deploy web honeypot placeholder",
+      "cost": 8,
+      "description": "Deploy decoy web server to detect attackers",
+      "effectiveness": {
+        "H1": 0.1,
+        "H2": 0.2,
+        "H3": 0.9
+      },
+      "deception_factor": 0.9,
+      "monitoring_boost": 0.6,
+      "implementation_time": "1 hour",
+      "risk_level": "Low"
+    }
+  ],
+  "attacker_profile": {
+    "sophistication": "High",
+    "persistence": "Long-term",
+    "resources": "Well-funded",
+    "motivation": "Espionage and data theft",
+    "attack_duration": "6-12 months",
+    "evasion_techniques": ["Living off the land", "Fileless malware", "Encrypted C2"]
+  },
+  "defense_philosophy": {
+    "approach": "Adaptive Deception Orchestration",
+    "principle": "Make the attacker's job harder while gathering intelligence",
+    "strategy": "Dynamic defense based on threat intelligence and risk assessment"
+  }
+}
