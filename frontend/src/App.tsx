@@ -6,7 +6,7 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEle
 
 const API = "http://127.0.0.1:8000"
 
-export const App: React.FC = () => {
+const App: React.FC = () => {
   const [scenario, setScenario] = useState<any>(null)
   const [beliefs, setBeliefs] = useState<Record<string, number>>({})
   const [turn, setTurn] = useState(0)
@@ -581,3 +581,5 @@ export const App: React.FC = () => {
     </div>
   )
 }
+
+export default App
