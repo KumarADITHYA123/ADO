@@ -4,45 +4,131 @@ import { Doughnut, Bar } from "react-chartjs-2"
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title)
 
-const API = "http://127.0.0.1:8000"
+const API = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000"
+
+interface Scenario {
+  title: string
+  description: string
+  assets: Array<{
+    id: string
+    name: string
+    value: number
+    vulnerability: string
+  }>
+  threats: Array<{
+    id: string
+    name: string
+    probability: number
+    impact: number
+    description: string
+  }>
+  actions: Array<{
+    id: string
+    name: string
+    cost: number
+    description: string
+    effectiveness: Record<string, number>
+  }>
+  attacker_profile: {
+    sophistication: string
+    persistence: string
+    resources: string
+    motivation: string
+  }
+}
+
+interface AttackerMind {
+  sophistication: string
+  current_focus: string
+  decision_factors: string[]
+  psychological_state: string
+}
+
+interface SimulationResult {
+  updated_beliefs: Record<string, number>
+  expected_loss_before: number
+  expected_loss_after: number
+  roi: number
+  rationale_summary: string
+  action_taken: any
+  evidence: Record<string, number>
+}
 
 const App: React.FC = () => {
-  const [scenario, setScenario] = useState<any>(null)
+  const [scenario, setScenario] = useState<Scenario | null>(null)
   const [beliefs, setBeliefs] = useState<Record<string, number>>({})
   const [turn, setTurn] = useState(0)
   const [log, setLog] = useState<string[]>([])
   const [expectedLoss, setExpectedLoss] = useState<number>(0)
-  const [simulationHistory, setSimulationHistory] = useState<any[]>([])
+  const [simulationHistory, setSimulationHistory] = useState<SimulationResult[]>([])
   const [showFormulas, setShowFormulas] = useState(false)
-  const [attackerMind, setAttackerMind] = useState<any>(null)
+  const [attackerMind, setAttackerMind] = useState<AttackerMind | null>(null)
   const [optimizationResult, setOptimizationResult] = useState<any>(null)
   const [showAssumptions, setShowAssumptions] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`${API}/scenario`).then(r => r.json()).then(data => {
-      setScenario(data)
-      setBeliefs({"H1": 0.6, "H2": 0.25, "H3": 0.15})
-      // Initialize attacker mind state
-      setAttackerMind({
-        sophistication: data.attacker_profile?.sophistication || "High",
-        current_focus: "Database Exfiltration",
-        decision_factors: ["Asset Value", "Detection Difficulty", "Success Probability"],
-        psychological_state: "Calculating optimal attack vector"
-      })
-    })
+    const loadScenario = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const response = await fetch(`${API}/scenario`)
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        
+        const data: Scenario = await response.json()
+        setScenario(data)
+        setBeliefs({"H1": 0.6, "H2": 0.25, "H3": 0.15})
+        
+        // Initialize attacker mind state
+        setAttackerMind({
+          sophistication: data.attacker_profile?.sophistication || "High",
+          current_focus: "Database Exfiltration",
+          decision_factors: ["Asset Value", "Detection Difficulty", "Success Probability"],
+          psychological_state: "Calculating optimal attack vector"
+        })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load scenario')
+        console.error('Error loading scenario:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadScenario()
   }, [])
 
   const onAction = async (actionId: string) => {
+    if (!scenario) {
+      setError('No scenario loaded')
+      return
+    }
+
     try {
-      const res = await fetch(`${API}/simulate_turn`, {
+      setLoading(true)
+      setError(null)
+      
+      const response = await fetch(`${API}/simulate_turn`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chosen_action_id: actionId, current_beliefs: beliefs }),
       })
-      const data = await res.json()
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data: SimulationResult = await response.json()
       
-      const action = scenario.actions.find((a: any) => a.id === actionId)
-      const historyEntry = {
+      const action = scenario.actions.find((a) => a.id === actionId)
+      if (!action) {
+        throw new Error('Action not found')
+      }
+
+      const historyEntry: SimulationResult = {
         turn: turn + 1,
         action: action.name,
         cost: action.cost,
@@ -59,8 +145,13 @@ const App: React.FC = () => {
       setTurn(t => t + 1)
       setLog(l => [`Turn ${turn + 1}: ${action.name} (ROI=${data.roi?.toFixed(2)})`, ...l])
       setSimulationHistory(h => [historyEntry, ...h])
-    } catch (e) {
-      setLog(l => [`Action failed: ${String(e)}`, ...l])
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Action failed'
+      setError(errorMessage)
+      setLog(l => [`Action failed: ${errorMessage}`, ...l])
+      console.error('Error executing action:', err)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -228,6 +319,78 @@ const App: React.FC = () => {
     }
   }
 
+  // Loading state
+  if (loading && !scenario) {
+    return (
+      <div style={{ 
+        fontFamily: "Inter, system-ui, Arial", 
+        padding: 20, 
+        maxWidth: 1200, 
+        margin: "0 auto",
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }}>
+        <div style={{
+          background: "white",
+          borderRadius: 12,
+          padding: 40,
+          boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
+          textAlign: "center"
+        }}>
+          <div style={{ fontSize: "2rem", marginBottom: 16 }}>🔄</div>
+          <h2 style={{ color: "#2d3748", marginBottom: 8 }}>Loading PS-3 ADO + BAS</h2>
+          <p style={{ color: "#4a5568" }}>Initializing threat intelligence and simulation engine...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error && !scenario) {
+    return (
+      <div style={{ 
+        fontFamily: "Inter, system-ui, Arial", 
+        padding: 20, 
+        maxWidth: 1200, 
+        margin: "0 auto",
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }}>
+        <div style={{
+          background: "white",
+          borderRadius: 12,
+          padding: 40,
+          boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
+          textAlign: "center"
+        }}>
+          <div style={{ fontSize: "2rem", marginBottom: 16 }}>❌</div>
+          <h2 style={{ color: "#e53e3e", marginBottom: 8 }}>Connection Error</h2>
+          <p style={{ color: "#4a5568", marginBottom: 16 }}>{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            style={{
+              padding: "12px 24px",
+              borderRadius: 8,
+              border: "none",
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              color: "white",
+              fontWeight: "bold",
+              cursor: "pointer"
+            }}
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ 
       fontFamily: "Inter, system-ui, Arial", 
@@ -261,6 +424,20 @@ const App: React.FC = () => {
         }}>
           <strong>Scenario:</strong> {scenario?.title ?? "Loading..."}
         </p>
+
+        {/* Error Display */}
+        {error && (
+          <div style={{
+            background: "#fed7d7",
+            border: "1px solid #feb2b2",
+            borderRadius: 8,
+            padding: 16,
+            marginBottom: 24,
+            color: "#c53030"
+          }}>
+            <strong>Error:</strong> {error}
+          </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 32 }}>
           <div>
@@ -474,33 +651,34 @@ const App: React.FC = () => {
               <button 
                 key={a.id} 
                 onClick={() => onAction(a.id)} 
-                disabled={disabled}
+                disabled={disabled || loading}
                 style={{ 
                   padding: "12px 24px",
                   borderRadius: 8,
                   border: "none",
-                  background: disabled ? "#e2e8f0" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  color: disabled ? "#a0aec0" : "white",
+                  background: (disabled || loading) ? "#e2e8f0" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  color: (disabled || loading) ? "#a0aec0" : "white",
                   fontWeight: "bold",
-                  cursor: disabled ? "not-allowed" : "pointer",
-                  boxShadow: disabled ? "none" : "0 4px 12px rgba(102, 126, 234, 0.4)",
+                  cursor: (disabled || loading) ? "not-allowed" : "pointer",
+                  boxShadow: (disabled || loading) ? "none" : "0 4px 12px rgba(102, 126, 234, 0.4)",
                   transition: "all 0.2s",
-                  fontSize: "1rem"
+                  fontSize: "1rem",
+                  position: "relative"
                 }}
                 onMouseOver={(e) => {
-                  if (!disabled) {
+                  if (!disabled && !loading) {
                     e.currentTarget.style.transform = "translateY(-2px)"
                     e.currentTarget.style.boxShadow = "0 6px 16px rgba(102, 126, 234, 0.6)"
                   }
                 }}
                 onMouseOut={(e) => {
-                  if (!disabled) {
+                  if (!disabled && !loading) {
                     e.currentTarget.style.transform = "translateY(0)"
                     e.currentTarget.style.boxShadow = "0 4px 12px rgba(102, 126, 234, 0.4)"
                   }
                 }}
               >
-                {a.name} (${a.cost})
+                {loading ? "⏳ Processing..." : `${a.name} ($${a.cost})`}
               </button>
             ))}
           </div>
