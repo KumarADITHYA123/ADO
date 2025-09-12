@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, HTTPException
+﻿from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Any
@@ -159,9 +159,22 @@ async def get_scenario():
     return SCENARIO_DATA
 
 @app.post("/simulate_turn")
-async def simulate_turn(request: SimulationRequest):
+async def simulate_turn(request: SimulationRequest, x_api_key: str | None = Header(default=None)):
     """Simulate a single turn of the defense game"""
     try:
+        # Optional demo API key guard
+        from os import getenv
+        required_key = getenv("DEMO_API_KEY")
+        if required_key and x_api_key != required_key:
+            raise HTTPException(status_code=401, detail="Unauthorized: invalid API key")
+
+        # Validate beliefs sum approximately 1.0; normalize if slightly off
+        if not request.current_beliefs:
+            raise HTTPException(status_code=400, detail="Beliefs required")
+        total_in = sum(request.current_beliefs.values())
+        if abs(total_in - 1.0) > 0.02:
+            s = total_in if total_in != 0 else 1.0
+            request.current_beliefs = {k: max(0.0, v)/s for k, v in request.current_beliefs.items()}
         # Find the chosen action
         action = next((a for a in SCENARIO_DATA["actions"] if a["id"] == request.chosen_action_id), None)
         if not action:
@@ -196,9 +209,22 @@ async def simulate_turn(request: SimulationRequest):
         raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
 
 @app.post("/optimize_deception")
-async def optimize_deception(request: OptimizationRequest):
+async def optimize_deception(request: OptimizationRequest, x_api_key: str | None = Header(default=None)):
     """Find the optimal defense action based on current beliefs"""
     try:
+        # Optional demo API key guard
+        from os import getenv
+        required_key = getenv("DEMO_API_KEY")
+        if required_key and x_api_key != required_key:
+            raise HTTPException(status_code=401, detail="Unauthorized: invalid API key")
+
+        # Validate beliefs sum approximately 1.0; normalize if slightly off
+        if not request.current_beliefs:
+            raise HTTPException(status_code=400, detail="Beliefs required")
+        total_in = sum(request.current_beliefs.values())
+        if abs(total_in - 1.0) > 0.02:
+            s = total_in if total_in != 0 else 1.0
+            request.current_beliefs = {k: max(0.0, v)/s for k, v in request.current_beliefs.items()}
         best_action = None
         best_roi = -float('inf')
         best_analysis = {}

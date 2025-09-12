@@ -69,6 +69,14 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    const normalize = (b: Record<string, number>) => {
+      const sum = Object.values(b).reduce((a, c) => a + c, 0)
+      if (sum <= 0) return b
+      const normalized: Record<string, number> = {}
+      Object.entries(b).forEach(([k, v]) => { normalized[k] = Math.max(0, v) / sum })
+      return normalized
+    }
+
     const loadScenario = async () => {
       try {
         setLoading(true)
@@ -81,7 +89,7 @@ const App: React.FC = () => {
         
         const data: Scenario = await response.json()
         setScenario(data)
-        setBeliefs({"H1": 0.6, "H2": 0.25, "H3": 0.15})
+        setBeliefs(normalize({"H1": 0.6, "H2": 0.25, "H3": 0.15}))
         
         // Initialize attacker mind state
         setAttackerMind({
@@ -91,8 +99,17 @@ const App: React.FC = () => {
           psychological_state: "Calculating optimal attack vector"
         })
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load scenario')
+        // Offline fallback: load baked-in scenario if API fails
         console.error('Error loading scenario:', err)
+        try {
+          const offline = await import('../../scenario.json')
+          const data: any = offline.default || offline
+          setScenario(data)
+          setBeliefs(normalize({"H1": 0.6, "H2": 0.25, "H3": 0.15}))
+          setError(null)
+        } catch (e) {
+          setError(err instanceof Error ? err.message : 'Failed to load scenario')
+        }
       } finally {
         setLoading(false)
       }
@@ -113,7 +130,7 @@ const App: React.FC = () => {
       
       const response = await fetch(`${API}/simulate_turn`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-API-Key": (import.meta as any).env?.VITE_DEMO_API_KEY || '' },
         body: JSON.stringify({ chosen_action_id: actionId, current_beliefs: beliefs }),
       })
 
@@ -140,7 +157,10 @@ const App: React.FC = () => {
         rationale: data.rationale_summary
       }
       
-      setBeliefs(data.updated_beliefs)
+      // Normalize on FE as well
+      const sum = Object.values(data.updated_beliefs || {}).reduce((a: number, c: number) => a + c, 0)
+      const normalized = sum > 0 ? Object.fromEntries(Object.entries(data.updated_beliefs).map(([k, v]) => [k, v / sum])) : data.updated_beliefs
+      setBeliefs(normalized)
       setExpectedLoss(data.expected_loss_after)
       setTurn(t => t + 1)
       setLog(l => [`Turn ${turn + 1}: ${action.name} (ROI=${data.roi?.toFixed(2)})`, ...l])

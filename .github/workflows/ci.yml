@@ -37,12 +37,12 @@ jobs:
     - name: Run backend tests
       run: |
         cd backend
-        python -m pytest tests/ -v || echo "No tests found, skipping"
+        python -m pytest -q
     
     - name: Run frontend tests
       run: |
         cd frontend
-        npm test || echo "No tests found, skipping"
+        npx vitest run --coverage
     
     - name: Build frontend
       run: |
