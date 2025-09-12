@@ -99,11 +99,12 @@ const App: React.FC = () => {
           psychological_state: "Calculating optimal attack vector"
         })
       } catch (err) {
-        // Offline fallback: load baked-in scenario if API fails
+        // Offline fallback: load baked-in scenario from public
         console.error('Error loading scenario:', err)
         try {
-          const offline = await import('../../scenario.json')
-          const data: any = offline.default || offline
+          const res = await fetch('/scenario.json')
+          if (!res.ok) throw new Error(`offline scenario fetch failed: ${res.status}`)
+          const data = await res.json()
           setScenario(data)
           setBeliefs(normalize({"H1": 0.6, "H2": 0.25, "H3": 0.15}))
           setError(null)
@@ -261,6 +262,7 @@ const App: React.FC = () => {
           <p><strong>Total Turns:</strong> ${turn}</p>
           <p><strong>Final Expected Loss:</strong> $${expectedLoss.toFixed(2)}</p>
           <p><strong>Total Actions Taken:</strong> ${simulationHistory.length}</p>
+          <p><strong>Beliefs Sum:</strong> ${((beliefs.H1||0)+(beliefs.H2||0)+(beliefs.H3||0)).toFixed(3)}</p>
         </div>
 
         <div class="section">
@@ -291,6 +293,15 @@ const App: React.FC = () => {
               `).join('')}
             </tbody>
           </table>
+        </div>
+        <div class="section">
+          <h3>ROI Inputs</h3>
+          <p>ROI = (Loss_Reduction - Cost) / Cost</p>
+          <ul>
+            ${simulationHistory.slice(0,1).map(entry => `
+              <li>First action inputs: loss_before=$${entry.expectedLossBefore.toFixed(2)}, loss_after=$${entry.expectedLossAfter.toFixed(2)}, cost=$${entry.cost}</li>
+            `).join('')}
+          </ul>
         </div>
 
         <div class="section">
@@ -469,6 +480,7 @@ const App: React.FC = () => {
               <div>H1 (Database): {(beliefs.H1 || 0).toFixed(3)}</div>
               <div>H2 (Mailbox): {(beliefs.H2 || 0).toFixed(3)}</div>
               <div>H3 (Web): {(beliefs.H3 || 0).toFixed(3)}</div>
+              <div style={{ marginTop: 8, fontWeight: 600 }}>Σ beliefs: {((beliefs.H1||0)+(beliefs.H2||0)+(beliefs.H3||0)).toFixed(3)}</div>
             </div>
           </div>
           
@@ -499,6 +511,11 @@ const App: React.FC = () => {
               }}>
                 {turn >= 3 ? " Simulation Complete!" : " Simulation Active"}
               </div>
+              {error && (
+                <div style={{ marginTop: 8, background: "#fff3cd", color: "#856404", padding: 8, borderRadius: 4, textAlign: "center" }}>
+                  Offline Mode: using local scenario
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -646,7 +663,7 @@ const App: React.FC = () => {
                   fontWeight: "bold"
                 }}
               >
-                🤖 AI Optimize
+                🔒🤖 AI Optimize
               </button>
               <button 
                 onClick={resetSimulation}
@@ -666,6 +683,12 @@ const App: React.FC = () => {
             </div>
           </div>
           
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            <button onClick={() => onAction('patch_db')} disabled={disabled || loading} style={{ padding: 8, borderRadius: 6, border: '1px solid #e2e8f0' }}>Demo Turn 1: Patch DB</button>
+            <button onClick={() => onAction('auth_logs')} disabled={disabled || loading} style={{ padding: 8, borderRadius: 6, border: '1px solid #e2e8f0' }}>Demo Turn 2: Monitor Auth</button>
+            <button onClick={() => onAction('web_honeypot')} disabled={disabled || loading} style={{ padding: 8, borderRadius: 6, border: '1px solid #e2e8f0' }}>Demo Turn 3: Honeypot</button>
+          </div>
+
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             {actions.map(a => (
               <button 
@@ -698,7 +721,7 @@ const App: React.FC = () => {
                   }
                 }}
               >
-                {loading ? "⏳ Processing..." : `${a.name} ($${a.cost})`}
+                {loading ? "⏳ Processing..." : `🔒 ${a.name} ($${a.cost})`}
               </button>
             ))}
           </div>
@@ -719,6 +742,8 @@ const App: React.FC = () => {
                 <strong>Expected ROI:</strong> {optimizationResult.analysis?.roi?.toFixed(2)}
                 <br />
                 <strong>Loss Reduction:</strong> ${optimizationResult.analysis?.expected_loss_reduction?.toFixed(2)}
+                <br />
+                <strong>Inputs:</strong> loss_before={optimizationResult.analysis?.loss_before?.toFixed?.(2) || 'n/a'}, loss_after={optimizationResult.analysis?.loss_after?.toFixed?.(2) || 'n/a'}, cost={optimizationResult.best_action?.cost}
               </p>
             </div>
           )}

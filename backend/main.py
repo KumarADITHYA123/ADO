@@ -1,4 +1,7 @@
 ﻿from fastapi import FastAPI, HTTPException, Header
+import os
+import logging
+from logging.handlers import RotatingFileHandler
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Any
@@ -8,6 +11,22 @@ import random
 from datetime import datetime
 
 app = FastAPI(title="PS-3 ADO + BAS API", version="1.0.0")
+
+# Demo audit logging to file
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'logs')
+try:
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_path = os.path.join(LOG_DIR, 'app.log')
+    file_handler = RotatingFileHandler(log_path, maxBytes=512000, backupCount=3)
+    file_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    file_handler.setFormatter(formatter)
+    root_logger = logging.getLogger()
+    if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
+        root_logger.addHandler(file_handler)
+except Exception:
+    # Fail silently for demo
+    pass
 
 # CORS middleware for frontend communication
 app.add_middleware(
@@ -165,8 +184,10 @@ async def simulate_turn(request: SimulationRequest, x_api_key: str | None = Head
         # Optional demo API key guard
         from os import getenv
         required_key = getenv("DEMO_API_KEY")
-        if required_key and x_api_key != required_key:
-            raise HTTPException(status_code=401, detail="Unauthorized: invalid API key")
+        require_flag = getenv("DEMO_REQUIRE_API_KEY", "true").lower() in ("1","true","yes")
+        if require_flag:
+            if not x_api_key or not required_key or x_api_key != required_key:
+                raise HTTPException(status_code=401, detail="Unauthorized: invalid API key")
 
         # Validate beliefs sum approximately 1.0; normalize if slightly off
         if not request.current_beliefs:
@@ -194,7 +215,7 @@ async def simulate_turn(request: SimulationRequest, x_api_key: str | None = Head
         # Generate attacker rationale
         rationale = generate_attacker_rationale(action, updated_beliefs)
         
-        return {
+        result = {
             "updated_beliefs": updated_beliefs,
             "expected_loss_before": loss_before,
             "expected_loss_after": loss_after,
@@ -204,6 +225,13 @@ async def simulate_turn(request: SimulationRequest, x_api_key: str | None = Head
             "evidence": evidence,
             "timestamp": datetime.now().isoformat()
         }
+
+        try:
+            logging.info("SIMULATE_TURN action=%s roi=%.4f loss_before=%.2f loss_after=%.2f", action.get('id'), roi, loss_before, loss_after)
+        except Exception:
+            pass
+
+        return result
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
@@ -215,8 +243,10 @@ async def optimize_deception(request: OptimizationRequest, x_api_key: str | None
         # Optional demo API key guard
         from os import getenv
         required_key = getenv("DEMO_API_KEY")
-        if required_key and x_api_key != required_key:
-            raise HTTPException(status_code=401, detail="Unauthorized: invalid API key")
+        require_flag = getenv("DEMO_REQUIRE_API_KEY", "true").lower() in ("1","true","yes")
+        if require_flag:
+            if not x_api_key or not required_key or x_api_key != required_key:
+                raise HTTPException(status_code=401, detail="Unauthorized: invalid API key")
 
         # Validate beliefs sum approximately 1.0; normalize if slightly off
         if not request.current_beliefs:
@@ -236,6 +266,9 @@ async def optimize_deception(request: OptimizationRequest, x_api_key: str | None
             # Simulate the action
             evidence = {threat_id: random.uniform(0.3, 0.8) for threat_id in request.current_beliefs.keys()}
             updated_beliefs = calculate_bayesian_update(request.current_beliefs, action, evidence)
+            # Compute losses and ROI
+            loss_before_calc = calculate_expected_loss(request.current_beliefs, SCENARIO_DATA["threats"])
+            loss_after_calc = calculate_expected_loss(updated_beliefs, SCENARIO_DATA["threats"])
             roi = calculate_roi(action, request.current_beliefs, updated_beliefs, SCENARIO_DATA["threats"])
             
             if roi > best_roi:
@@ -243,7 +276,9 @@ async def optimize_deception(request: OptimizationRequest, x_api_key: str | None
                 best_action = action
                 best_analysis = {
                     "updated_beliefs": updated_beliefs,
-                    "expected_loss_reduction": calculate_expected_loss(request.current_beliefs, SCENARIO_DATA["threats"]) - calculate_expected_loss(updated_beliefs, SCENARIO_DATA["threats"]),
+                    "expected_loss_reduction": loss_before_calc - loss_after_calc,
+                    "loss_before": loss_before_calc,
+                    "loss_after": loss_after_calc,
                     "roi": roi,
                     "rationale": generate_attacker_rationale(action, updated_beliefs)
                 }
@@ -255,12 +290,19 @@ async def optimize_deception(request: OptimizationRequest, x_api_key: str | None
                 "available_budget": request.available_budget
             }
         
-        return {
+        result = {
             "best_action_id": best_action["id"],
             "best_action": best_action,
             "analysis": best_analysis,
             "timestamp": datetime.now().isoformat()
         }
+
+        try:
+            logging.info("OPTIMIZE defense=%s roi=%.4f loss_reduction=%.2f", best_action.get('id'), best_analysis.get('roi', 0.0), best_analysis.get('expected_loss_reduction', 0.0))
+        except Exception:
+            pass
+
+        return result
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
